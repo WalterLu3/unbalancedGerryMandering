@@ -18,29 +18,6 @@ import time
 import os,sys
 
 
-######## Input model ########
-# total congressional vote
-CONGRESS_VOTE = 8
-# district number
-DISTRICT_NUM = int(sys.argv[1])
-# population weights
-
-POP_WEIGHTS = [0]*DISTRICT_NUM
-temp = CONGRESS_VOTE
-index = 0
-while temp != 0:
-    POP_WEIGHTS[index % DISTRICT_NUM] += 1
-    index += 1
-    temp -= 1
-
-# county width
-ASSIGN_W = 80
-# county height
-ASSIGN_H = 80
-# population bound
-popBound = 0.05
-############################
-
 def merge(G, nodeA, nodeB):
     """
     Merge nodeA and nodeB in the networkX graph G. The change is done in-place for G.
@@ -104,7 +81,7 @@ def EuclideanDistance(A,B):
     result = ((A[0]-B[0])**2 + (A[1]-B[1])**2)**(1/2)
     return result
 
-def mergeProcess(adjList, position, districtNum):
+def generateInit(adjList, position, districtNum):
     """
     Generate initial graph by keeping merging a random node and its closest neighbor.
 
@@ -115,7 +92,7 @@ def mergeProcess(adjList, position, districtNum):
         means node a and node b are adjacent.)
 
     position : dictionary,
-        a dictionary that contains the coordinate for every node that appears in adjlist.
+        a dictionary that contains the coordinate for every node that appears in adjList.
 
     districtNum : int,
         district number we want to have for a given state.
@@ -188,9 +165,12 @@ def findAdj(GPop):
 
     Returns
     -------
-    
-    
+    listDistrict : list,
+        list of tuples where each tuple contains a pair of adjacent districts
 
+    adjNodes : list,
+        list of tuples where each tuple is in the form (A, (B,C)). A is a unit on the border and A is assigned
+        to district B. A is also adjacent to units that belongs to district nodeBdistrict 
     """
     adjDistricts = []
     adjNodes = []
@@ -200,11 +180,29 @@ def findAdj(GPop):
         if nodeADistrict != nodeBDistrict:
             adjDistricts.append((nodeADistrict,nodeBDistrict))
             adjNodes.append((i,(nodeADistrict,nodeBDistrict)))
-    return list(set(adjDistricts)), adjNodes
 
-def findPopulation(GPop):
+    listDistrict = list(set(adjDistricts)) 
+    return listDistrict, adjNodes
+
+def findPopulation(GPop,districtNum):
+    """
+    Given a network graph, and the number of districts, calculates the population of each district.
+
+    Parameters
+    ----------
+    GPop : networkx.classes.graph.Graph.
+        the network graph where each node's 'assign' attribute contains the district assginment information.
+
+    districtNum : int,
+        district number we want to have for a given state.
+
+    Returns
+    -------
+    popDistricts : dict,
+        a dictionary that contains the population for each district
+    """
     popDistrict = {}
-    for i in range(1,DISTRICT_NUM+1):
+    for i in range(1,districtNum+1):
         total = 0
         for n in GPop.nodes:
             if GPop.nodes[n]["assign"] == i:
@@ -212,25 +210,74 @@ def findPopulation(GPop):
         popDistrict[i] = total
     return popDistrict
 
-def findPosition(GPop):
+def findPosition(GPop,districtNum,position):
+    """
+    Given a network graph, and the number of districts, calculates the population of each district.
+
+    Parameters
+    ----------
+    GPop : networkx.classes.graph.Graph.
+        the network graph where each node's 'assign' attribute contains the district assginment information.
+
+    districtNum : int,
+        district number we want to have for a given state.
+
+    position : dict,
+        the coordinate of every unit
+
+    Returns
+    -------
+    positionDistricts : dict,
+        a dictionary that contains the coordinate for each district. Each district has a list [A,B,C]. A is the 
+        x coordinate, B is the y coordinate, and C is the number of units in that district. (Storing C allows
+        us to speed up the calculation process later on.
+    """
     positionDistrict = {}
-    for i in range(1,DISTRICT_NUM+1):
+    for i in range(1,districtNum+1):
         positionDistrict[i] = [0,0,0]
     for i in GPop.nodes:
         positionDistrict[GPop.nodes[i]["assign"]][0] +=  position[i][0]
         positionDistrict[GPop.nodes[i]["assign"]][1] +=  position[i][1]
         positionDistrict[GPop.nodes[i]["assign"]][2] +=  1
     
-    for i in range(1,DISTRICT_NUM+1):
+    for i in range(1,districtNum+1):
         positionDistrict[i] = [positionDistrict[i][0]/positionDistrict[i][2], \
                                positionDistrict[i][1]/positionDistrict[i][2], \
                                positionDistrict[i][2]]
     return positionDistrict
 
-def returnSecond(x):
-    return x[1]
+# def returnSecond(x):
+    
+#     return x[1]
 
-def changPopAndPos(popDistrict,posDistrict,sourceDistrict,destinationDistrict,unit):
+def changPopAndPos(popDistrict,posDistrict,sourceDistrict,destinationDistrict,unit, position,population):
+
+    """
+    Recalculate population and position of each district after moving a unit from sourceDistrict to destinationDistrict.
+
+    Parameters
+    ----------
+
+    popDistricts : dict,
+        a dictionary that contains the population for each district
+
+    posDistricts : dict,
+        a dictionary that contains the coordinate for each district. Each district has a list [A,B,C]. A is the 
+        x coordinate, B is the y coordinate, and C is the number of units in that district.
+
+    sourceDistrict : int,
+        the district that will give one of its border unit to destinationDistrict
+
+    destinationDistrict : int,
+        the district that will receive one of sourceDistrict's border unit
+
+
+    Returns
+    -------
+    None
+
+    (The change will be done in-place for popDistrict and posDistrict)
+    """
     # adjust population
     popDistrict[sourceDistrict] -= population[unit]
     popDistrict[destinationDistrict] += population[unit]
@@ -257,22 +304,65 @@ def changPopAndPos(popDistrict,posDistrict,sourceDistrict,destinationDistrict,un
     posDistrict[destinationDistrict][1] = posDistrict[destinationDistrict][1]/posDistrict[destinationDistrict][2]    
 
 
-def adjustingProcess(GPop, weights, interval,iterations = 1000):
-    # population adjustment
+def adjustingProcess(GPop, districtNum, position, population, weights, interval, iterations = 1000):
+    """
+    Adjusting the current map so that it is feasible in terms of population and contiguity.
+
+    Parameters
+    ----------
+    GPop : networkx.classes.graph.Graph.
+        the current network graph where each node's 'assign' attribute contains the district assginment information.
+
+    districtNum : int,
+        district number we want to have for a given state.
+
+    position : dict,
+        the coordinate of every unit
+    
+    population : dict,
+        the population of every unit
+    weights : dictionary,
+        a dictionary of int that contains the population weight for each district
+
+    interval : float,
+        difference bound that determines the stopping condition
+
+    iterations : int,
+        max iteration of the adjusting phase
+
+
+    Returns
+    -------
+    GPop : networkx.classes.graph.Graph,
+        the final assignment graph. (Changes are done in-place in this function)
+    
+    popDistrict : dict,
+        final population of every district
+    
+    posDistrict : dict,
+        final position of every district
+
+    converge : bool,
+        if converges True, else false
+    
+    """
     max_disparity = []
-    tStart = time.time()
+
     # start population adjustment
     lastInfeasible = None
     last_change = None
     last_discontiguous = []
     for i in range(iterations):
+        # find the adjacency information in terms of districts
         adjDistricts, adjNodes= findAdj(GPop)
 
+        # calculate the population and position information at the start once
         if i == 0 :
-            popDistrict = findPopulation(GPop)
-            posDistrict = findPosition(GPop)
+            popDistrict = findPopulation(GPop,districtNum)
+            posDistrict = findPosition(GPop,districtNum,position)
 
         
+        # identify the district pair with maximum population disparity
         largestDiff = 0
         largestAdj = None
         tempRecord = []
@@ -284,17 +374,16 @@ def adjustingProcess(GPop, weights, interval,iterations = 1000):
                 largestAdj = j
         max_disparity.append(largestDiff)
 
+        # print the disparity value every 50 iterations
         if i%50 == 0:
-            #print(sorted(tempRecord,reverse=True))
             print(i,largestDiff)
 
-        # if i%100 == 0:
-        #     with open("experiment20221004/pic_result5_{}_cc.pk".format(i),'wb') as f:
-        #         pk.dump(GPop,f)
-        
+        # if the disparity value is less than the given bound, we can end
         if largestDiff < interval:
             break
 
+
+        # identify the overpopulated and the underpopulated districts of the maximum disparity pair
         sourceDistrict = None
         destinationDistrict = None
         
@@ -319,14 +408,15 @@ def adjustingProcess(GPop, weights, interval,iterations = 1000):
                 for n in a[0]:
                     if n in sourceNodes:
                         borderPoints.append(n)
-        # choose the one that maximize the compactness                
+
+        # identify the border unit that maximizes the compactness                
         tempDist = []
         for p in borderPoints:     
             tempDist.append((p,
                             EuclideanDistance(position[p],posDistrict[destinationDistrict]) - \
                             EuclideanDistance(position[p],posDistrict[sourceDistrict])))
             
-        tempDist = sorted(tempDist,key = returnSecond, reverse=False)
+        tempDist = sorted(tempDist,key = lambda x: x[1], reverse=False)
 
         removeNode = tempDist[0][0]
         subNodes = set(sourceNodes) - set([removeNode])
@@ -338,7 +428,10 @@ def adjustingProcess(GPop, weights, interval,iterations = 1000):
                         posDistrict,
                         sourceDistrict,
                         destinationDistrict,
-                        removeNode)
+                        unit = removeNode,
+                        position = position, 
+                        population = population)
+
         # check if connected, if not then assign the connected the smallest few components also
         if not nx.is_connected(tempG):
             connected_comp = list(nx.connected_components(tempG))
@@ -350,154 +443,192 @@ def adjustingProcess(GPop, weights, interval,iterations = 1000):
                             posDistrict,
                             sourceDistrict,
                             destinationDistrict,
-                            n)
+                            unit =n,
+                            position = position, 
+                            population = population)
 
         
-        # check contiguity constraint
-        # temp_discontiguous = []
-        # chosenNode = None
-        # for n in tempDist:
-        #     removeNode = n[0]
-        #     subNodes = set(sourceNodes) - set([removeNode])
-        #     tempG = GPop.subgraph(subNodes)
-
-        #     if (removeNode in last_discontiguous) and sourceDistrict== last_change[1] and destinationDistrict == last_change[2]:
-        #         temp_discontiguous.append(chosenNode)
-        #     else:
-        #         if nx.is_connected(tempG):
-        #             chosenNode = removeNode
-        #             break
-        #         else:
-        #             temp_discontiguous.append(chosenNode)
-
-        
-
-                
-        # if chosenNode == None:
-        #     print("No node is chosen!!!")
-        #     break
-        # last_change = (chosenNode,sourceDistrict,destinationDistrict)
-        # # reassign
-        # GPop.nodes[chosenNode]["assign"] = destinationDistrict
-        # last_discontiguous = temp_discontiguous
     ## see if converges
     converge = True
     if i == iterations:
         converge = False
     # align with the assignment 
     assignDict = nx.get_node_attributes(GPop, "assign")
-    # data_list = []
-    # for i in range(ASSIGN_W):
-    #     temp_list = []
-    #     for j in range(ASSIGN_H):
-    #         temp_list.append(assignDict["n_x{}_y{}".format(i,j)])
-    #     data_list.append(temp_list)
+    return GPop, popDistrict, posDistrict, converge
 
-    # data_list.reverse()
-    data_list = assignDict
-    return GPop, data_list, popDistrict, posDistrict, converge
+def generateMap(adjList,districtNum,population,position,popWeights,popBound,iterations=10000):
 
-# creat district set
-district = []
-districtSet = []
-for idx in range(DISTRICT_NUM):
-    district.append("d"+str(idx+1))
-    districtSet.append("d"+str(idx+1))
-nodes = []
-
-# open wisconsin data
-with open("updated_nodeWisc.pk", "rb") as f:
-    nodes = pk.load(f)
-
-# open adjacency data
-adjList = []
-
-with open("updated_adjWisc.pk", "rb") as f:
-    adjList = pk.load(f)
-
-# open node position
-position = {}
-
-with open("updated_coordWisc.pk", "rb") as f:
-    position = pk.load(f)
-
-population = {}
-
-with open("updated_popWisc.pk", "rb") as f:
-    population = pk.load(f)
-
-totalPop = 0
-unitNumber = {} #used to count the units in it
-for n in nodes:
-    unitNumber[n] = 1
-    totalPop += population[n]
-
-
-
-
-# initial merge
-position2 = copy.deepcopy(position)
-G, initial_assign = mergeProcess(adjList, position2,DISTRICT_NUM)
-
-#print(initial_assign)
-
-#with open('experiment_result.pk','wb') as f:
-#    pk.dump(initial_assign,f)
-
-# with open('experiment_result.pk','rb') as f:
-#    initial_assign = pk.load(f)
-
-# with open('experiment20221004/imbalance_result5_d6.pk','rb') as f:
-#     result = pk.load(f)
-# initial_assign = result['init']
-# with open('experiment20221004/imbalance_result3_d8_cc.pk','rb') as f:
-#     result = pk.load(f)
-# initial_assign = result['init']
-
-# Align weighted graph
-
-POP_WEIGHTS.sort()
-beforePop = {}
-for key in initial_assign:
-    dis = initial_assign[key]
-    beforePop[dis] = beforePop.get(dis,0) + population[key]
-print(beforePop)
-
-biggestDist = sorted(beforePop.keys(),key = lambda x : beforePop[x])
-
-weights = {}
-for i in range(len(biggestDist)):
-    weights[biggestDist[i]] = POP_WEIGHTS[i]
-
-interval = (totalPop/sum(POP_WEIGHTS)) * popBound
-
-print('bound : {}'.format(interval))
-#adjusting process
-GPop = nx.Graph()
-GPop.add_edges_from(adjList)
-nx.set_node_attributes(GPop,initial_assign,name = "assign")
-nx.set_node_attributes(GPop,population,name = "population")
-start = time.time()
-GPop, data_adjusted, popResult, posDistrict, converge = adjustingProcess(GPop, weights, interval = interval, iterations = 10000)
-end = time.time()
-print(popResult)
-
-
-
-extraInfo = {}
-extraInfo['init'] = initial_assign
-extraInfo['final'] = GPop
-extraInfo['adjList'] = adjList
-extraInfo['population'] = population
-extraInfo['position'] = position
-extraInfo['posDistrict'] = posDistrict
-extraInfo['time'] = end - start
-extraInfo['coverge'] = converge
-
-# pathDir = 'WisconsinExperimentsLarge2/{}districts/'.format(DISTRICT_NUM)
-# newFile = 'WisconsinExperimentsLarge2/{}districts/{}.pk'.format(DISTRICT_NUM,len(os.listdir(pathDir))+1)
-
-with open(newFile,'wb') as f:
-    pk.dump(extraInfo,f)
+    # input check
+    assert (type(adjList) == list) , 'TypeError : adjList'
+    assert (type(districtNum) == int) , 'TypeError : districtNum'
+    assert (type(population) == dict) , 'TypeError : population'
+    assert (type(position) == dict) , 'TypeError : position'
+    assert (type(popWeights) == list) , 'TypeError : popWeights'
+    assert (type(popBound) == float) , 'TypeError : popBound'
+    assert (type(iterations) == int) , 'TypeError : iterations'
+    assert (len(popWeights) == districtNum) , 'ValueError : population weights are not aligned with the number of districts'
     
-    
+    position2 = copy.deepcopy(position)
+    # generate initiakl graph
+    initG, initAssign = generateInit(adjList, position2, districtNum) 
+
+    # reorder district according to the population
+    popWeights.sort()
+
+    beforePop = {}
+    for key in initAssign:
+        dis = initAssign[key]
+        beforePop[dis] = beforePop.get(dis,0) + population[key]
+
+    biggestDist = sorted(beforePop.keys(),key = lambda x : beforePop[x])
+
+    weights = {}
+    for i in range(len(biggestDist)):
+        weights[biggestDist[i]] = popWeights[i]
+
+
+    totalPop = sum(beforePop.values())
+    interval = (totalPop/sum(popWeights)) * popBound # calculate interval
+
+    # start generating maps based the initial map
+
+    # create a new graph that contains the information of the initial graph
+    GPop = nx.Graph()
+    GPop.add_edges_from(adjList)
+    nx.set_node_attributes(GPop,initAssign,name = "assign")
+    nx.set_node_attributes(GPop,population,name = "population") # some extra step, can be optimized in the future
+
+    start = time.time() 
+    GPop, popDistrict, posDistrict, converge = adjustingProcess(GPop = GPop,
+                                                                districtNum = districtNum, 
+                                                                position = position,
+                                                                population = population,
+                                                                weights = weights,
+                                                                interval = interval,
+                                                                iterations = 10000)
+    end = time.time() 
+    outputInfo = {}
+    outputInfo['init'] = initAssign
+    outputInfo['final'] = GPop
+    outputInfo['posDistrict'] = posDistrict
+    outputInfo['popDistrict'] = popDistrict
+    outputInfo['time'] = end - start
+    outputInfo['converge'] = converge
+
+    return outputInfo
+
+
+if __name__ == '__main__' :
+
+    ######## Input model ########
+    # total congressional vote
+    CONGRESS_VOTE = 8
+    # district number
+    DISTRICT_NUM = 5
+
+    ############################
+
+    # open wisconsin data
+    with open("../../../Gerrymander_Scenario_Generate/unintentional_gerrymandering/updated_nodeWisc.pk", "rb") as f:
+        nodes = pk.load(f)
+
+    # open adjacency data
+    adjList = []
+
+    with open("../../../Gerrymander_Scenario_Generate/unintentional_gerrymandering/updated_adjWisc.pk", "rb") as f:
+        adjList = pk.load(f)
+
+    # open node position
+    position = {}
+
+    with open("../../../Gerrymander_Scenario_Generate/unintentional_gerrymandering/updated_coordWisc.pk", "rb") as f:
+        position = pk.load(f)
+
+    population = {}
+
+    with open("../../../Gerrymander_Scenario_Generate/unintentional_gerrymandering/updated_popWisc.pk", "rb") as f:
+        population = pk.load(f)
+
+    totalPop = 0
+    unitNumber = {} #used to count the units in it
+    for n in nodes:
+        unitNumber[n] = 1
+        totalPop += population[n]
+
+    result = generateMap(adjList = adjList,
+                        districtNum = DISTRICT_NUM,
+                        population = population,
+                        position = position,
+                        popWeights = [2,2,2,1,1],
+                        popBound = 0.05,
+                        iterations=10000)
+
+    with open("../../tempRepo/test.pk","wb") as f:
+        pk.dump(result,f)
+
+    # # initial merge
+    # position2 = copy.deepcopy(position)
+    # G, initial_assign = mergeProcess(adjList, position2,DISTRICT_NUM)
+
+    # #print(initial_assign)
+
+    # #with open('experiment_result.pk','wb') as f:
+    # #    pk.dump(initial_assign,f)
+
+    # # with open('experiment_result.pk','rb') as f:
+    # #    initial_assign = pk.load(f)
+
+    # # with open('experiment20221004/imbalance_result5_d6.pk','rb') as f:
+    # #     result = pk.load(f)
+    # # initial_assign = result['init']
+    # # with open('experiment20221004/imbalance_result3_d8_cc.pk','rb') as f:
+    # #     result = pk.load(f)
+    # # initial_assign = result['init']
+
+    # # Align weighted graph
+
+    # POP_WEIGHTS.sort()
+    # beforePop = {}
+    # for key in initial_assign:
+    #     dis = initial_assign[key]
+    #     beforePop[dis] = beforePop.get(dis,0) + population[key]
+    # print(beforePop)
+
+    # biggestDist = sorted(beforePop.keys(),key = lambda x : beforePop[x])
+
+    # weights = {}
+    # for i in range(len(biggestDist)):
+    #     weights[biggestDist[i]] = POP_WEIGHTS[i]
+
+    # interval = (totalPop/sum(POP_WEIGHTS)) * popBound
+
+    # print('bound : {}'.format(interval))
+    # #adjusting process
+    # GPop = nx.Graph()
+    # GPop.add_edges_from(adjList)
+    # nx.set_node_attributes(GPop,initial_assign,name = "assign")
+    # nx.set_node_attributes(GPop,population,name = "population")
+    # start = time.time()
+    # GPop, popResult, posDistrict, converge = adjustingProcess(GPop, weights, interval = interval, iterations = 10000, districtNum = DISTRICT_NUM, poistion = position, population = population)
+    # end = time.time()
+    # print(popResult)
+
+
+
+    # extraInfo = {}
+    # extraInfo['init'] = initial_assign
+    # extraInfo['final'] = GPop
+    # extraInfo['adjList'] = adjList
+    # extraInfo['population'] = population
+    # extraInfo['position'] = position
+    # extraInfo['posDistrict'] = posDistrict
+    # extraInfo['time'] = end - start
+    # extraInfo['coverge'] = converge
+
+    # # pathDir = 'WisconsinExperimentsLarge2/{}districts/'.format(DISTRICT_NUM)
+    # # newFile = 'WisconsinExperimentsLarge2/{}districts/{}.pk'.format(DISTRICT_NUM,len(os.listdir(pathDir))+1)
+
+    # with open(newFile,'wb') as f:
+    #     pk.dump(extraInfo,f)
+        
+        
