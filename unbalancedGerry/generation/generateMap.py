@@ -519,6 +519,8 @@ def generateMap(adjList,districtNum,population,position,popWeights,popBound,iter
 
 
 if __name__ == '__main__' :
+    ### Testing script ###
+        
 
     ######## Input model ########
     # total congressional vote
@@ -563,72 +565,9 @@ if __name__ == '__main__' :
                         popBound = 0.05,
                         iterations=10000)
 
-    with open("../../tempRepo/test.pk","wb") as f:
-        pk.dump(result,f)
-
-    # # initial merge
-    # position2 = copy.deepcopy(position)
-    # G, initial_assign = mergeProcess(adjList, position2,DISTRICT_NUM)
-
-    # #print(initial_assign)
-
-    # #with open('experiment_result.pk','wb') as f:
-    # #    pk.dump(initial_assign,f)
-
-    # # with open('experiment_result.pk','rb') as f:
-    # #    initial_assign = pk.load(f)
-
-    # # with open('experiment20221004/imbalance_result5_d6.pk','rb') as f:
-    # #     result = pk.load(f)
-    # # initial_assign = result['init']
-    # # with open('experiment20221004/imbalance_result3_d8_cc.pk','rb') as f:
-    # #     result = pk.load(f)
-    # # initial_assign = result['init']
-
-    # # Align weighted graph
-
-    # POP_WEIGHTS.sort()
-    # beforePop = {}
-    # for key in initial_assign:
-    #     dis = initial_assign[key]
-    #     beforePop[dis] = beforePop.get(dis,0) + population[key]
-    # print(beforePop)
-
-    # biggestDist = sorted(beforePop.keys(),key = lambda x : beforePop[x])
-
-    # weights = {}
-    # for i in range(len(biggestDist)):
-    #     weights[biggestDist[i]] = POP_WEIGHTS[i]
-
-    # interval = (totalPop/sum(POP_WEIGHTS)) * popBound
-
-    # print('bound : {}'.format(interval))
-    # #adjusting process
-    # GPop = nx.Graph()
-    # GPop.add_edges_from(adjList)
-    # nx.set_node_attributes(GPop,initial_assign,name = "assign")
-    # nx.set_node_attributes(GPop,population,name = "population")
-    # start = time.time()
-    # GPop, popResult, posDistrict, converge = adjustingProcess(GPop, weights, interval = interval, iterations = 10000, districtNum = DISTRICT_NUM, poistion = position, population = population)
-    # end = time.time()
-    # print(popResult)
+    # with open("../../tempRepo/test.pk","wb") as f:
+    #     pk.dump(result,f)
 
 
-
-    # extraInfo = {}
-    # extraInfo['init'] = initial_assign
-    # extraInfo['final'] = GPop
-    # extraInfo['adjList'] = adjList
-    # extraInfo['population'] = population
-    # extraInfo['position'] = position
-    # extraInfo['posDistrict'] = posDistrict
-    # extraInfo['time'] = end - start
-    # extraInfo['coverge'] = converge
-
-    # # pathDir = 'WisconsinExperimentsLarge2/{}districts/'.format(DISTRICT_NUM)
-    # # newFile = 'WisconsinExperimentsLarge2/{}districts/{}.pk'.format(DISTRICT_NUM,len(os.listdir(pathDir))+1)
-
-    # with open(newFile,'wb') as f:
-    #     pk.dump(extraInfo,f)
         
         
