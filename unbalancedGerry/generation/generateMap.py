@@ -352,6 +352,8 @@ def adjustingProcess(GPop, districtNum, position, population, weights, interval,
     lastInfeasible = None
     last_change = None
     last_discontiguous = []
+    print("Generation starts : ")
+    print("maximum weighted population disparity (MWPD) goal : {}".format(interval))
     for i in range(iterations):
         # find the adjacency information in terms of districts
         adjDistricts, adjNodes= findAdj(GPop)
@@ -376,7 +378,7 @@ def adjustingProcess(GPop, districtNum, position, population, weights, interval,
 
         # print the disparity value every 50 iterations
         if i%50 == 0:
-            print(i,largestDiff)
+            print("iterations : {}, MWPD : {}".format(i,largestDiff))
 
         # if the disparity value is less than the given bound, we can end
         if largestDiff < interval:
