@@ -518,56 +518,6 @@ def generateMap(adjList,districtNum,population,position,popWeights,popBound,iter
     return outputInfo
 
 
-if __name__ == '__main__' :
-    ### Testing script ###
-        
-
-    ######## Input model ########
-    # total congressional vote
-    CONGRESS_VOTE = 8
-    # district number
-    DISTRICT_NUM = 5
-
-    ############################
-
-    # open wisconsin data
-    with open("../../../Gerrymander_Scenario_Generate/unintentional_gerrymandering/updated_nodeWisc.pk", "rb") as f:
-        nodes = pk.load(f)
-
-    # open adjacency data
-    adjList = []
-
-    with open("../../../Gerrymander_Scenario_Generate/unintentional_gerrymandering/updated_adjWisc.pk", "rb") as f:
-        adjList = pk.load(f)
-
-    # open node position
-    position = {}
-
-    with open("../../../Gerrymander_Scenario_Generate/unintentional_gerrymandering/updated_coordWisc.pk", "rb") as f:
-        position = pk.load(f)
-
-    population = {}
-
-    with open("../../../Gerrymander_Scenario_Generate/unintentional_gerrymandering/updated_popWisc.pk", "rb") as f:
-        population = pk.load(f)
-
-    totalPop = 0
-    unitNumber = {} #used to count the units in it
-    for n in nodes:
-        unitNumber[n] = 1
-        totalPop += population[n]
-
-    result = generateMap(adjList = adjList,
-                        districtNum = DISTRICT_NUM,
-                        population = population,
-                        position = position,
-                        popWeights = [2,2,2,1,1],
-                        popBound = 0.05,
-                        iterations=10000)
-
-    # with open("../../tempRepo/test.pk","wb") as f:
-    #     pk.dump(result,f)
-
 
         
         
