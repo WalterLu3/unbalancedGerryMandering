@@ -100,7 +100,8 @@ def saveGraph(inFile,colors,shapeDF,pathFile):
     patches = []
     for c in range(len(colors)):
         patches.append(mpatches.Patch(color=colors[c], label='d{}'.format(c+1)))
-    plt.legend(handles=patches,fontsize='xx-large')
+    districtNum = len(set(district.values()))
+    plt.legend(handles=patches[:districtNum],fontsize='xx-large')
 
     # save the figure to the figure file
     fig.savefig(pathFile)
@@ -142,6 +143,43 @@ def saveSingle(inputPath,shapePath,outputPath):
     # create graph
     saveGraph(inFile = inFile,colors = colors, shapeDF = shapeDF, pathFile = outputPath)
     return 'succeed.'
+
+def saveMultiple(inputPathList,shapePath,outputPathList):
+    """
+    Draw multiple graphs given assignment information in the same color.
+
+    Parameters
+    ----------
+    inputPathList : list,
+        paths where assignment data is located
+
+    shapePath : string,
+        path where the shape file is located
+
+    outputPathList : list,
+        paths where the output graph are set to be stored.
+
+    Return
+    ------
+    a success message.
+
+    """
+
+    # create graph
+    for i in range(len(inputPathList)):
+        # read in the assignment file
+        inFile = loadPK(inputPathList[i])
+        districtSet = sorted(list(inFile['posDistrict'].keys()))
+        
+        if i == 0:
+            colors = colorChoice(inFile)
+            # read in the shapeFile
+            shapeDF = gpd.read_file(shapePath)
+            shapeDF['color'] = 0
+
+        saveGraph(inFile = inFile,colors = colors, shapeDF = shapeDF, pathFile = outputPathList[i])
+    return 'succeed.'
+
 
 
 
