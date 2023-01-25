@@ -33,8 +33,7 @@ def calculatePop(assign,vote):
     """
 
     # load map
-    with open(assign,'rb') as f:
-        data = pk.load(f)['final']
+    data = assign['final']
 
     # aggregate the votes of each district
     districtVote = {}
